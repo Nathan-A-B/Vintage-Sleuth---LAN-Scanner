@@ -8,10 +8,12 @@ from mac_vendor_lookup import MacLookup
 import socket
 import getmac
 import os
+import sys
 import re
 import bluetooth
 import subprocess
 import threading
+
 
 # Create Window, Set Window Title, Set Window Icon, Set Miminize Icon
 root = tk.Tk()
@@ -94,6 +96,57 @@ thread.start()
 
 #######################################################################
 
+def search_text():
+    # Get the search term from the search bar
+    search_term = search_bar.get()
+
+    # Check if the input is empty
+    if not search_term:
+        return
+
+    # Search for the term in the text widget
+    start_index = "1.0"
+    while True:
+        # Search for the next occurrence of the search term
+        index = output_field.search(search_term, start_index, stopindex=tk.END)
+
+        # If no more occurrences are found, stop searching
+        if not index:
+            break
+
+        # Highlight the occurrence of the search term
+        end_index = f"{index}+{len(search_term)}c"
+        output_field.tag_add("search", index, end_index)
+
+        # Update the start index for the next search
+        start_index = end_index
+
+def copy_all():
+    # Copy all the text in the output field to the clipboard
+    output_field.clipboard_clear()
+    output_field.clipboard_append(output_field.get("1.0", tk.END))
+
+# Create a search bar with black background and green foreground
+search_bar = tk.Entry(frame, bg="black", fg="green")
+search_bar.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.YES)
+
+# Create a search button with black background and green foreground
+search_button = tk.Button(frame, text="Highlight", bg="black", fg="green", command=search_text)
+search_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.NO)
+
+# Create a clear highlight button with black background and green foreground
+clear_button = tk.Button(frame, text="Clear Highlight", bg="black", fg="green", command=lambda: output_field.tag_remove("search", "1.0", tk.END))
+clear_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.NO)
+
+# Create a copy all button with black background and green foreground
+copy_button = tk.Button(frame, text="Copy", bg="black", fg="green", command=copy_all)
+copy_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.NO)
+
+# Create a tag for highlighting search results
+output_field.tag_configure("search", background="green", foreground="black")
+
+#######################################################################
+
 def ping_device(packet_size, ping_count):
     ip_address = ip_entry.get()
     ping_process = subprocess.Popen(f"ping -n {ping_count} -l {packet_size} {ip_address}", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -135,7 +188,7 @@ packet_size_entry.grid(row=0, column=1, padx=10, pady=0)
 
 # Create an entry widget to accept the number of pings
 ping_count_entry = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=30)
-ping_count_entry.insert(0, "Ping Count")
+ping_count_entry.insert(0, "Ping Amount")
 ping_count_entry.bind("<FocusIn>", lambda event: ping_count_entry.delete('0', 'end') if ping_count_entry.get() == "Ping Count" else None)
 ping_count_entry.bind("<FocusOut>", lambda event: ping_count_entry.insert(0, "Ping Count") if ping_count_entry.get() == "" else None)
 ping_count_entry.grid(row=0, column=2, padx=10, pady=0)
@@ -307,8 +360,40 @@ text = scrolledtext.ScrolledText(frame, font="Consolas 10", fg="green", bg="blac
 text.pack(fill=tk.BOTH, expand=True)
 text.configure(height=10)
 
+def search_text():
+    global text
+    text.tag_remove("found", "1.0", tk.END)
+    search_string = search_entry.get()
+    if search_string:
+        idx = "1.0"
+        while True:
+            idx = text.search(search_string, idx, nocase=1, stopindex=tk.END)
+            if not idx:
+                break
+            last_idx = f"{idx}+{len(search_string)}c"
+            text.tag_add("found", idx, last_idx)
+            text.tag_config("found", background="green", foreground="black")
+            idx = last_idx
+        text.see(idx)
+
+# Create an entry widget to search for text in the text widget
+search_entry = tk.Entry(frame)
+search_entry.pack(side=tk.TOP, fill=tk.X)
+search_entry.configure(bg='black', fg='green', font='Consolas 10')
+
+# Create a highlight button
+highlight_button = tk.Button(frame, text="Highlight", command=search_text, font="Consolas 10", fg="green", bg="black")
+highlight_button.pack(side=tk.LEFT)
+
+# Create a clear highlight button
+clear_highlight_button = tk.Button(frame, text="Clear Highlight", command=lambda: text.tag_remove("found", "1.0", tk.END), font="Consolas 10", fg="green", bg="black")
+clear_highlight_button.pack(side=tk.LEFT)
+
+# Create a copy button
+copy_button = tk.Button(frame, text="Copy", command=lambda: root.clipboard_append(text.get("1.0", tk.END)), font="Consolas 10", fg="green", bg="black")
+copy_button.pack(side=tk.LEFT)
+
 ###########################################################
 
 update_output()
 root.mainloop()
-
