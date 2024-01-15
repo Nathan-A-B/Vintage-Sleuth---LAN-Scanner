@@ -1,34 +1,48 @@
 # Python Interpretor - Python 3.10.6 64-Bit 
-from tkinter import messagebox
-import subprocess
-import tkinter as tk
-from tkinter import *
-from tkinter import scrolledtext
 from mac_vendor_lookup import MacLookup
+from tkinter import scrolledtext
+from tkinter import messagebox
+from tkinter import *
+import tkinter as tk
+import subprocess
+import threading
+import bluetooth
+import ctypes
 import socket
 import getmac
 import os
-import sys
 import re
-import bluetooth
-import subprocess
-import threading
+import sys
 
+def is_admin():
+    try:
+        return ctypes.windll.shell32.IsUserAnAdmin()
+    except:
+        return False
+
+def run_as_admin():
+    if not is_admin():
+        # Re-run the program with admin rights
+        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__, None, 1)
 
 # Create Window, Set Window Title, Set Window Icon, Set Miminize Icon
 root = tk.Tk()
-root.title("Vintage Sleuth - Subnet Scanner")
-root.iconbitmap(default='App Icon.ico')
+root.geometry(f"1067x900")
+root.title("Vintage Sleuth")
+root.iconbitmap(default='Icon.ico')
+
+# Ask for admin privileges
+run_as_admin()
 
 # Enable Resizing Window
-root.resizable(width=True, height=True)
+root.resizable(width=False, height=True)
 
 # Create a frame that fills the entire window
 frame = tk.Frame(root, bg="black")
 frame.pack(fill=tk.BOTH, expand=tk.YES)
 
 # Create a scrolled text widget with a height of 25 and width of 80
-output_field = scrolledtext.ScrolledText(frame, height=21, width=80, bg="black", fg="green")
+output_field = scrolledtext.ScrolledText(frame, height=21, width=20, bg="black", fg="green")
 output_field.pack(fill=tk.BOTH, expand=tk.YES)
 
 # Disable editing of the text widget
@@ -135,7 +149,7 @@ search_button = tk.Button(frame, text="Highlight", bg="black", fg="green", comma
 search_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.NO)
 
 # Create a clear highlight button with black background and green foreground
-clear_button = tk.Button(frame, text="Clear Highlight", bg="black", fg="green", command=lambda: output_field.tag_remove("search", "1.0", tk.END))
+clear_button = tk.Button(frame, text="Clear", bg="black", fg="green", command=lambda: output_field.tag_remove("search", "1.0", tk.END))
 clear_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.NO)
 
 # Create a copy all button with black background and green foreground
@@ -172,33 +186,37 @@ frame = tk.Frame(root, width=200, height=50)
 frame.pack(fill=tk.BOTH, expand=False)
 frame.configure(bg="black")
 
+###############################################
+
 # Create an entry widget to accept the IP address with a width of 20 characters
-ip_entry = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=30)
+ip_entry = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=18)
 ip_entry.bind("<FocusIn>", lambda args: ip_entry.delete('0', 'end') if ip_entry.get() == "IP Address" else None)
 ip_entry.bind("<FocusOut>", lambda args: ip_entry.insert(0, "IP Address") if ip_entry.get() == "" else None)
 ip_entry.insert(0, "IP Address")
-ip_entry.grid(row=0, column=0, padx=10, pady=0)
+ip_entry.grid(row=0, column=0, padx=5, pady=0)
 
 # Create an entry widget to accept the packet size
-packet_size_entry = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=30)
+packet_size_entry = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=18)
 packet_size_entry.insert(0, "Packet Size")
 packet_size_entry.bind("<FocusIn>", lambda event: packet_size_entry.delete('0', 'end') if packet_size_entry.get() == "Packet Size" else None)
 packet_size_entry.bind("<FocusOut>", lambda event: packet_size_entry.insert(0, "Packet Size") if packet_size_entry.get() == "" else None)
-packet_size_entry.grid(row=0, column=1, padx=10, pady=0)
+packet_size_entry.grid(row=0, column=1, padx=5, pady=0)
 
 # Create an entry widget to accept the number of pings
-ping_count_entry = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=30)
-ping_count_entry.insert(0, "Ping Amount")
-ping_count_entry.bind("<FocusIn>", lambda event: ping_count_entry.delete('0', 'end') if ping_count_entry.get() == "Ping Count" else None)
-ping_count_entry.bind("<FocusOut>", lambda event: ping_count_entry.insert(0, "Ping Count") if ping_count_entry.get() == "" else None)
-ping_count_entry.grid(row=0, column=2, padx=10, pady=0)
+ping_count_entry = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=18)
+ping_count_entry.insert(0, "Packet Amount")
+ping_count_entry.bind("<FocusIn>", lambda event: ping_count_entry.delete('0', 'end') if ping_count_entry.get() == "Packet Amount" else None)
+ping_count_entry.bind("<FocusOut>", lambda event: ping_count_entry.insert(0, "Packet Amount") if ping_count_entry.get() == "" else None)
+ping_count_entry.grid(row=0, column=2, padx=5, pady=0)
+
+###############################################
 
 # Create a button to perform the ping operation
-button = tk.Button(frame, text="Execute A Ping", font="Consolas 10", fg="green", bg="black", command=ping_wrapper)
-button.grid(row=0, column=3, padx=0, pady=0) 
+button = tk.Button(frame, text="Ping", font="Consolas 10", fg="green", bg="black", command=ping_wrapper)
+button.grid(row=0, column=3, padx=5, pady=0, sticky='e') 
 
 # Create a text widget to display the ping status
-frank = tk.Text(frame, font="Consolas 10", fg="green", bg="black", name="frank", height=10, width=80)
+frank = tk.Text(frame, font="Consolas 10", fg="green", bg="black", name="frank", height=10, width=50)
 frank.grid(row=0, column=4, padx=0, pady=0, sticky="ew")
 frank.configure(state='normal')
 
@@ -224,26 +242,30 @@ output_field.tag_configure("search", background="green", foreground="black")
 frame = tk.Frame(root, bg="black")
 frame.pack(side=tk.LEFT, pady=0, fill=tk.BOTH, expand=True)
 
+###############################################
+
 # Create an entry widget for the hostname
-entry1 = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=30)
-entry1.pack(side=tk.LEFT, pady=0, padx=10)
+entry1 = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=18)
+entry1.pack(side=tk.LEFT, pady=0, padx=5)
 
 # Set the default value of the entry widget to the current hostname
 entry1.insert(0, socket.gethostname())
 
 # Create an entry widget for the IP address
-entry2 = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=30)
-entry2.pack(side=tk.LEFT, pady=0, padx=10)
+entry2 = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=18)
+entry2.pack(side=tk.LEFT, pady=0, padx=5)
 
 # Set the default value of the entry widget to the current IP address
 entry2.insert(0, socket.gethostbyname(socket.gethostname()))
 
 # Create an entry widget for the MAC address
-entry3 = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=30)
-entry3.pack(side=tk.LEFT, pady=0, padx=10)
+entry3 = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=18)
+entry3.pack(side=tk.LEFT, pady=0, padx=5)
 
 # Set the default value of the entry widget to the current MAC address
 entry3.insert(0, getmac.get_mac_address())
+
+###############################################
 
 frame.configure(bg='black')
 
@@ -301,7 +323,7 @@ def update_device_info():
         print(f"Error occurred while updating MAC address: {e}")
 
 # Create a button to update the device information
-button1 = tk.Button(frame, text="Modify Device Information", font="Consolas 10", fg="green", bg="black", command=update_device_info)
+button1 = tk.Button(frame, text="Modify Information", font="Consolas 10", fg="green", bg="black", command=update_device_info)
 button1.pack(side=tk.LEFT, pady=0, padx=10)
 
 ###########################################################
@@ -352,13 +374,13 @@ frame = tk.Frame(root)
 frame.pack()
 frame.configure(bg="black")
 
-button2 = tk.Button(frame, text="Perform Bluetooth Scan", font="Consolas 10", fg="green", bg="black", command=start_scan)
-button2.pack(side=tk.LEFT, pady=0, padx=20)
+button2 = tk.Button(frame, text="Bluetooth Scan", font="Consolas 10", fg="green", bg="black", command=start_scan)
+button2.pack(side=tk.LEFT, pady=0, padx=5)
 
 # Create a text widget to display the device information
 text = scrolledtext.ScrolledText(frame, font="Consolas 10", fg="green", bg="black")
 text.pack(fill=tk.BOTH, expand=True)
-text.configure(height=10)
+text.configure(height=10, width=800)
 
 def search_text():
     global text
@@ -376,22 +398,22 @@ def search_text():
             idx = last_idx
         text.see(idx)
 
-# Create an entry widget to search for text in the text widget
-search_entry = tk.Entry(frame)
-search_entry.pack(side=tk.TOP, fill=tk.X)
-search_entry.configure(bg='black', fg='green', font='Consolas 10')
+# Create a copy button
+copy_button = tk.Button(frame, text="Copy", command=lambda: root.clipboard_append(text.get("1.0", tk.END)), font="Consolas 10", fg="green", bg="black")
+copy_button.pack(side=tk.RIGHT)
+
+# Create a clear highlight button
+clear_highlight_button = tk.Button(frame, text="Clear", command=lambda: text.tag_remove("found", "1.0", tk.END), font="Consolas 10", fg="green", bg="black")
+clear_highlight_button.pack(side=tk.RIGHT)
 
 # Create a highlight button
 highlight_button = tk.Button(frame, text="Highlight", command=search_text, font="Consolas 10", fg="green", bg="black")
-highlight_button.pack(side=tk.LEFT)
+highlight_button.pack(side=tk.RIGHT)
 
-# Create a clear highlight button
-clear_highlight_button = tk.Button(frame, text="Clear Highlight", command=lambda: text.tag_remove("found", "1.0", tk.END), font="Consolas 10", fg="green", bg="black")
-clear_highlight_button.pack(side=tk.LEFT)
-
-# Create a copy button
-copy_button = tk.Button(frame, text="Copy", command=lambda: root.clipboard_append(text.get("1.0", tk.END)), font="Consolas 10", fg="green", bg="black")
-copy_button.pack(side=tk.LEFT)
+# Create an entry widget to search for text in the text widget
+search_entry = tk.Entry(frame)
+search_entry.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+search_entry.configure(bg='black', fg='green', font='Consolas 10')
 
 ###########################################################
 
