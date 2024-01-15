@@ -1,4 +1,6 @@
-# Python Interpretor - Python 3.10.6 64-Bit 
+# Copyright (c) 2024, Nathan Bass
+# All rights reserved.
+
 from mac_vendor_lookup import MacLookup
 from tkinter import scrolledtext
 from tkinter import messagebox
