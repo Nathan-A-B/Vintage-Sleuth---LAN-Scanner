@@ -1,43 +1,11 @@
-# Copyright (c) 2024, Nathan Bass
-# All rights reserved.
+from modules import *
 
-from mac_vendor_lookup import MacLookup
-from tkinter import scrolledtext
-from tkinter import messagebox
-from tkinter import *
-import tkinter as tk
-import subprocess
-import threading
-import bluetooth
-import ctypes
-import socket
-import getmac
-import os
-import re
-import sys
-
-def is_admin():
-    try:
-        return ctypes.windll.shell32.IsUserAnAdmin()
-    except:
-        return False
-
-def run_as_admin():
-    if not is_admin():
-        # Re-run the program with admin rights
-        ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, __file__, None, 1)
-
-# Create Window, Set Window Title, Set Window Icon, Set Miminize Icon
 root = tk.Tk()
 root.geometry(f"1067x900")
 root.title("Vintage Sleuth")
-root.iconbitmap(default='Icon.ico')
-
-# Ask for admin privileges
-run_as_admin()
 
 # Enable Resizing Window
-root.resizable(width=False, height=True)
+root.resizable(width=False, height=False)
 
 # Create a frame that fills the entire window
 frame = tk.Frame(root, bg="black")
@@ -54,11 +22,80 @@ output_field.bind("<Key>", lambda e: "break")
 output_field.bind("<Control-c>", lambda e: output_field.clipboard_append(output_field.selection_get()))
 output_field.bind("<Control-v>", lambda e: output_field.insert(INSERT, output_field.clipboard_get()))
 
-# Create a grip for dragging the window
-grip = tk.Label(root, text="", bg="black", fg="white")
-grip.pack(side=tk.TOP, fill=tk.X)
+os.system('cls' if os.name == 'nt' else 'clear')
+#######################################################################
 
-########################################################################
+# Create a label widget
+lbl = tk.Label(root, text='')
+
+# Place the label widget in the top right corner of the window
+lbl.place(relx=0.96, rely=0.01, anchor='ne')
+
+# Configure the label widget
+lbl.config(justify='left', font=('Consolas', 9), fg='green', bg='black')
+
+# Define a function to update the label widget
+def update_label():
+    output = subprocess.check_output(['netstat', '-e']).decode('utf-8')
+    if output != lbl['text']:
+        lbl['text'] = output
+    root.after(1000, update_label)
+
+# Create a new thread to run the update_label function
+t = threading.Thread(target=update_label)
+t.daemon = True
+t.start()
+
+#######################################################################
+
+jlbl = scrolledtext.ScrolledText(root, wrap=tk.WORD, width=55, height=15, font=('Consolas', 9), fg='green', bg='black', state=tk.DISABLED, highlightbackground='black', borderwidth=0, yscrollcommand=None, xscrollcommand=None)
+jlbl.place(relx=1.0, rely=0.35, anchor='ne')
+jlbl.insert(tk.END, "")
+
+jlbl.bind("<Control-v>", lambda e: "break")
+jlbl.bind("<Button-3><ButtonRelease-3>", lambda e: "break")
+
+def get_arp_table():
+    result = subprocess.run(['arp', '-a'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    return result.stdout
+
+def tracert(ip_address, jlbl):
+    result = subprocess.run(['tracert', ip_address], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    results_text = f"{result.stdout.split('Tracing route to')[1].replace('=', '')}\n"
+    results_text = '\n'.join(results_text.split('\n')[:-2])
+    jlbl.config(state=tk.NORMAL)
+    jlbl.insert(tk.END, results_text)
+    jlbl.delete("end-2c", tk.END)
+    jlbl.config(state=tk.DISABLED)
+
+def tracert_all(jlbl):
+    try:
+        arp_table = get_arp_table()
+        ip_addresses = [line.split()[0] for line in arp_table.splitlines() if 'dynamic' in line.lower()]
+
+        # Re-enable the scrolled text widget
+        jlbl.config(state=tk.NORMAL)
+
+        threads = []
+        for ip_address in ip_addresses:
+            t = threading.Thread(target=tracert, args=(ip_address, jlbl))
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        # Disable the scrolled text widget after adding text
+        jlbl.config(state=tk.DISABLED)
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        jlbl.config(state=tk.DISABLED)
+        jlbl.insert(tk.END, f"An error occurred: {e}")
+
+t = threading.Thread(target=tracert_all, args=(jlbl,))
+t.start()
+
+#######################################################################
 
 # Initialize a variable to store the previous output
 previous_output = ""
@@ -66,44 +103,54 @@ previous_output = ""
 def update_output():
     global previous_output
 
-    # Run the arp -a command and get its output
-    output = subprocess.check_output(["arp", "-a", "-v"]) 
+    try:
+        # Run the arp -a command and get its output
+        output = subprocess.check_output(["arp", "-a", "-v"]) 
 
-    # Get vendor information from MAC addresses
-    mac = MacLookup()
-    output_lines = []
-    for line in output.decode('ascii').split('\n'):
-        if 'dynamic' in line:
-            mac_address = line.split()[1]
-            try:
-                vendor_name = mac.lookup(mac_address)
-                output_lines.append(f"{line} ({vendor_name})")
-            except:
+        # Get vendor information from MAC addresses
+        mac = MacLookup()
+        output_lines = []
+        for line in output.decode('ascii').split('\n'):
+            if 'dynamic' in line:
+                mac_address = line.split()[1]
+                try:
+                    vendor_name = mac.lookup(mac_address)
+                    output_lines.append(f"{line} ({vendor_name})")
+                except Exception as e:
+                    output_lines.append(line + f" Error: {e}")
+            else:
                 output_lines.append(line)
-        else:
-            output_lines.append(line)
 
-    # Check if the output has changed
-    new_output = "\n".join(output_lines)
-    if new_output != previous_output:
-        # Update the output field
+        # Check if the output has changed
+        new_output = "\n".join(output_lines)
+        if new_output != previous_output:
+            # Update the output field
+            output_field.delete("1.0", tk.END)
+
+            # Align the text to the left in the output field
+            output_field.tag_configure("left", justify="left")
+            output_field.tag_configure("center", justify="center")
+
+            # Add vendor information to each line of the ARP table
+            for line in output_lines:
+                output_field.insert(tk.END, f"{line}\n", "left")
+
+            # Set the font of the text in the output field to Consolas
+            output_field.configure(font=("Consolas", 10))
+
+            # Update the previous output
+            previous_output = new_output
+
+            # Disable pasting into the text field
+            output_field.bind("<Control-v>", lambda e: "break")
+
+    except Exception as e:
+        # Update the output field with the error message
         output_field.delete("1.0", tk.END)
+        output_field.insert(tk.END, f"Error: {e}", "left")
+        output_field.configure(font=("Consolas", 10, "bold"), foreground="red")
 
-        # Align the text to the left in the output field
-        output_field.tag_configure("left", justify="left")
-        output_field.tag_configure("center", justify="center")
-
-        # Add vendor information to each line of the ARP table
-        for line in output_lines:
-            output_field.insert(tk.END, f"{line}\n", "left")
-
-        # Set the font of the text in the output field to Consolas
-        output_field.configure(font=("Consolas", 10))
-
-        # Update the previous output
-        previous_output = new_output
-
-    # Constant Update
+    # Constant Update Every Second
     root.after(1000, update_output)
 
 # Create a new thread to run the update_output function
@@ -155,23 +202,44 @@ clear_button = tk.Button(frame, text="Clear", bg="black", fg="green", command=la
 clear_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.NO)
 
 # Create a copy all button with black background and green foreground
-copy_button = tk.Button(frame, text="Copy", bg="black", fg="green", command=copy_all)
+copy_button = tk.Button(frame, text="Copy All", bg="black", fg="green", command=copy_all)
 copy_button.pack(side=tk.LEFT, fill=tk.BOTH, expand=tk.NO)
 
 # Create a tag for highlighting search results
 output_field.tag_configure("search", background="green", foreground="black")
 
+# Create a thread for the search function
+search_thread = threading.Thread(target=search_text)
+
+# Start the thread when the search button is clicked
+search_button.config(command=search_thread.start)
+
 #######################################################################
 
-def ping_device(packet_size, ping_count):
-    ip_address = ip_entry.get()
-    ping_process = subprocess.Popen(f"ping -n {ping_count} -l {packet_size} {ip_address}", stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    ping_output, ping_error = ping_process.communicate()
-    ping_status = ping_output.decode('utf-8') + ping_error.decode('utf-8')
+ping_process = None
 
-    # Clear the text widget and insert the ping status
-    frank.delete("1.0", tk.END)
-    frank.insert(tk.END, ping_status, "unique_tag")
+def ping_device(packet_size, ping_count):
+    global ping_process
+    ip_address = ip_entry.get()
+    ping_process = subprocess.Popen(f"ping -n {ping_count} -l {packet_size} {ip_address}", stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+    while True:
+        if ping_process.poll() is not None:  
+            break
+        output = ping_process.stdout.readline().decode('utf-8')
+        if output == '':
+            break
+        frank.config(state="normal")
+        frank.insert(tk.END, output, "unique_tag")
+        frank.config(state="disabled")
+    ping_process = None  
+
+def stop_ping_device():
+    global ping_process
+    if ping_process:
+        ping_process.kill()
+        button.config(state="normal")  
+        stop_button.config(state="disabled")
+        ping_process = None  
 
 def ping_thread(packet_size, ping_count):
     ping_device(packet_size, ping_count)
@@ -181,12 +249,22 @@ def ping_wrapper():
     packet_size = packet_size_entry.get()
     ping_count = ping_count_entry.get()
     button.config(state="disabled")
+    stop_button.config(state="normal")  
+    frank.config(state="disabled")
     threading.Thread(target=ping_thread, args=(packet_size, ping_count)).start()
 
 # Create a frame to hold the entry widget, button, and text widget
 frame = tk.Frame(root, width=200, height=50)
 frame.pack(fill=tk.BOTH, expand=False)
 frame.configure(bg="black")
+
+# Create a button to perform the ping operation
+button = tk.Button(frame, text="Ping", font="Consolas 10", fg="green", bg="black", command=ping_wrapper)
+button.grid(row=0, column=3, padx=5, pady=0, sticky='e')
+
+# Create a button to stop the ping operation
+stop_button = tk.Button(frame, text="Stop Ping", font="Consolas 10", fg="green", bg="black", command=stop_ping_device)
+stop_button.place(x=565, y=64.47)
 
 ###############################################
 
@@ -213,14 +291,13 @@ ping_count_entry.grid(row=0, column=2, padx=5, pady=0)
 
 ###############################################
 
-# Create a button to perform the ping operation
-button = tk.Button(frame, text="Ping", font="Consolas 10", fg="green", bg="black", command=ping_wrapper)
-button.grid(row=0, column=3, padx=5, pady=0, sticky='e') 
-
-# Create a text widget to display the ping status
+## Create a text widget to display the ping status
 frank = tk.Text(frame, font="Consolas 10", fg="green", bg="black", name="frank", height=10, width=50)
 frank.grid(row=0, column=4, padx=0, pady=0, sticky="ew")
-frank.configure(state='normal')
+frank.configure(state='disable')
+
+# Enable autoscrolling
+frank.see("end")
 
 # Create a scrollbar widget and set its command option to the yview method of the text widget
 scroll = tk.Scrollbar(frame, command=frank.yview)
@@ -246,90 +323,6 @@ frame.pack(side=tk.LEFT, pady=0, fill=tk.BOTH, expand=True)
 
 ###############################################
 
-# Create an entry widget for the hostname
-entry1 = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=18)
-entry1.pack(side=tk.LEFT, pady=0, padx=5)
-
-# Set the default value of the entry widget to the current hostname
-entry1.insert(0, socket.gethostname())
-
-# Create an entry widget for the IP address
-entry2 = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=18)
-entry2.pack(side=tk.LEFT, pady=0, padx=5)
-
-# Set the default value of the entry widget to the current IP address
-entry2.insert(0, socket.gethostbyname(socket.gethostname()))
-
-# Create an entry widget for the MAC address
-entry3 = tk.Entry(frame, font="Consolas 10", fg="green", bg="black", width=18)
-entry3.pack(side=tk.LEFT, pady=0, padx=5)
-
-# Set the default value of the entry widget to the current MAC address
-entry3.insert(0, getmac.get_mac_address())
-
-###############################################
-
-frame.configure(bg='black')
-
-def validate_device_name(device_name):
-    # Device name should only contain alphanumeric characters and hyphens
-    return bool(re.match("^[a-zA-Z0-9-]*$", device_name))
-
-def validate_ip_address(ip_address):
-    # IP address should be a valid IPv4 address
-    import socket
-    try:
-        socket.inet_aton(ip_address)
-        return True
-    except socket.error:
-        return False
-
-def validate_mac_address(mac_address):
-    # MAC address should be a valid MAC address
-    return bool(re.match("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$", mac_address))
-
-def update_device_info():
-    # Update the device name
-    new_device_name = entry1.get()
-    if not validate_device_name(new_device_name):
-        messagebox.showerror("Error", "Invalid device name")
-        return
-    try:
-        os.system(f'netdom renamecomputer %computername% /newname:{new_device_name}')
-    except Exception as e:
-        print(f"Error occurred while updating device name: {e}")
-
-    # Update the IP address
-    new_ip_address = entry2.get()
-    if not validate_ip_address(new_ip_address):
-        messagebox.showerror("Error", "Invalid IP address")
-        return
-    try:
-        os.system(f'netsh interface ipv4 set address name="Ethernet" static {new_ip_address} 255.255.255.0 192.168.1.1')
-    except Exception as e:
-        print(f"Error occurred while updating IP address: {e}")
-
-    # Update the MAC address
-    new_mac_address = entry3.get()
-    if not validate_mac_address(new_mac_address):
-        messagebox.showerror("Error", "Invalid MAC address")
-        return
-    try:
-        os.system(f'getmac /s localhost /v /fo list | findstr /c:"Physical Address" /r /n > mac.txt')
-        with open('mac.txt', 'r') as f:
-            mac_list = f.readlines()
-        mac_index = int(mac_list[0].split(':')[0]) - 1
-        os.system(f'reg add "HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Control\\Class\\{{4d36e972-e325-11ce-bfc1-08002be10318}}" /v "NetworkAddress" /d "{new_mac_address}" /f')
-        os.system('del mac.txt')
-    except Exception as e:
-        print(f"Error occurred while updating MAC address: {e}")
-
-# Create a button to update the device information
-button1 = tk.Button(frame, text="Modify Information", font="Consolas 10", fg="green", bg="black", command=update_device_info)
-button1.pack(side=tk.LEFT, pady=0, padx=10)
-
-###########################################################
-
 def print_devices():
     nearby_devices = bluetooth.discover_devices()
     table_data = []
@@ -337,33 +330,18 @@ def print_devices():
         device_name = bluetooth.lookup_name(mac_address)
         table_data.append([device_name, mac_address])
 
-    # Create a table to display the device information
-    table = tk.Frame(frame)
-    table.pack(fill=tk.BOTH, expand=True)
-    table.configure(bg="black")
-
-    # Make the table not editable but copyable
-    table.bind("<Button-1>", lambda event: table.focus_set())
-    table.bind("<Control-c>", lambda event: root.clipboard_append(table.selection_get()))
-
     # Clear the text widget and insert the device information
     text.delete("1.0", tk.END)
     text.insert(tk.END, f"{'Device Name:':<30}{'MAC Address:':<20}\n")
     for row in table_data:
         text.insert(tk.END, f"{row[0]:<30}{row[1]:<20}\n")
 
-    # Set the text state to disabled
-    text.configure(state='disabled')
-
-    # Bind the mouse click to a function that sets the focus on the text
-    text.bind("<1>", lambda event: text.focus_set())
-
     # Enable the Bluetooth button after the scan is complete
-    button2.configure(state='normal')
+    button21.configure(state='normal')
 
 def start_scan():
     # Disable the Bluetooth button before starting the scan thread
-    button2.configure(state='disabled')
+    button21.configure(state='disabled')
 
     # Create a new thread to run the print_devices() function
     scan_thread = threading.Thread(target=print_devices)
@@ -372,36 +350,40 @@ def start_scan():
     scan_thread.start()
 
 # Create a frame to hold the buttons and table
+root.configure(bg="black")
 frame = tk.Frame(root)
 frame.pack()
 frame.configure(bg="black")
 
-button2 = tk.Button(frame, text="Bluetooth Scan", font="Consolas 10", fg="green", bg="black", command=start_scan)
-button2.pack(side=tk.LEFT, pady=0, padx=5)
+button21 = tk.Button(frame, text="Bluetooth Scan", font="Consolas 10", fg="green", bg="black", command=start_scan)
+button21.pack(side=tk.LEFT, pady=4.5, padx=5)
 
 # Create a text widget to display the device information
 text = scrolledtext.ScrolledText(frame, font="Consolas 10", fg="green", bg="black")
 text.pack(fill=tk.BOTH, expand=True)
-text.configure(height=10, width=800)
+text.configure(height=10, width=50)
+
+###########################################################
 
 def search_text():
     global text
     text.tag_remove("found", "1.0", tk.END)
     search_string = search_entry.get()
-    if search_string:
-        idx = "1.0"
-        while True:
-            idx = text.search(search_string, idx, nocase=1, stopindex=tk.END)
-            if not idx:
-                break
-            last_idx = f"{idx}+{len(search_string)}c"
-            text.tag_add("found", idx, last_idx)
-            text.tag_config("found", background="green", foreground="black")
-            idx = last_idx
-        text.see(idx)
+    try:
+        if search_string:
+            pattern = re.compile(search_string, re.IGNORECASE)
+            matches = pattern.finditer(text.get("1.0", tk.END))
+            for match in matches:
+                start = match.start()
+                end = match.end()
+                text.tag_add("found", f"1.0+{start}c", f"1.0+{end}c")
+                text.tag_config("found", background="green", foreground="black")
+            text.see("1.0")
+    except Exception as e:
+        print(f"An error occurred: {e}")
 
 # Create a copy button
-copy_button = tk.Button(frame, text="Copy", command=lambda: root.clipboard_append(text.get("1.0", tk.END)), font="Consolas 10", fg="green", bg="black")
+copy_button = tk.Button(frame, text="Copy All", command=lambda: root.clipboard_append(text.get("1.0", tk.END)), font="Consolas 10", fg="green", bg="black")
 copy_button.pack(side=tk.RIGHT)
 
 # Create a clear highlight button
@@ -419,5 +401,52 @@ search_entry.configure(bg='black', fg='green', font='Consolas 10')
 
 ###########################################################
 
+def spoof_mac():
+    try:
+        target_ip = Lip_entry.get()
+        new_mac = mac_entry.get()
+
+        # Fetching local IP address
+        local_ip = socket.gethostbyname_ex(socket.gethostname())[2][0]
+        messagebox.showinfo("Your IP Address", f"Your current IP address: {local_ip}")
+
+        arp_request = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(op=1, pdst=target_ip, hwdst="ff:ff:ff:ff:ff:ff", hwsrc=new_mac)
+        send(arp_request)
+
+        messagebox.showinfo("Success", "MAC spoofing successful!")
+    except Exception as e:
+        messagebox.showerror("Error", f"Error: {e}")
+
+# Create a Frame with black background
+frame = Frame(root, bg="black")
+frame.place(x=3, y=800)
+
+# Labels with green font and Consolas font family
+Label(frame, text="Target IP:", bg="black", fg="green", font=("Consolas", 10)).grid(row=0, column=0)
+Label(frame, text="New MAC:", bg="black", fg="green", font=("Consolas", 10)).grid(row=1, column=0)
+
+# Entry widgets with green font and Consolas font family
+Lip_entry = Entry(frame, font=("Consolas", 10), fg="green", bg="black")
+mac_entry = Entry(frame, font=("Consolas", 10), fg="green", bg="black")
+
+Lip_entry.grid(row=0, column=1)
+mac_entry.grid(row=1, column=1)
+
+# Spoof button with green font and Consolas font family, placed next to the entry widgets
+spoof_button = Button(frame, text="Spoof MAC", command=spoof_mac, font=("Consolas", 8), fg="green", bg="black")
+spoof_button.grid(row=0, column=2, padx=10)
+
+# Clear fields button with green font and Consolas font family, placed next to the entry widgets
+def clear_fields():
+    Lip_entry.set('')
+    mac_entry.set('')
+
+clear_button = Button(frame, text="Clear Fields", command=clear_fields, font=("Consolas", 8), fg="green", bg="black")
+clear_button.grid(row=0, column=3, padx=2.5)
+
+###########################################################
+
 update_output()
 root.mainloop()
+
+
