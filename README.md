@@ -1,4 +1,6 @@
 # Vintage Sleuth 
-Vintage Sleuth is a local subnet and Bluetooth scanner with device name, IP address, and mac address spoofing features.
 
-![Detective-removebg-preview](https://github.com/User101077/Vintage-Sleuth---LAN-Scanner/assets/119013498/6b8c2f2a-14d2-477e-8529-9c5e9697578c)
+This is a network scanner app designed for penetration texting, granting a user the ability to scan their local subnet, including Bluetooth devices in the vicinity. 
+It also has a ping utility to test the connectivity of a device, and a traffic monitor to keep track of incoming and outgoing traffic. 
+Additionally, it has MAC and IP spoofing capabilities, which allow you to change the MAC and IP addresses of a device to bypass network restrictions.
+
